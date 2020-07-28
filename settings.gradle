@@ -1,0 +1,2 @@
+rootProject.name = "ComposeTube"
+include ':app'
