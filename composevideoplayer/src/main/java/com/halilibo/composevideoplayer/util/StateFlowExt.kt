@@ -1,10 +1,9 @@
 package com.halilibo.composevideoplayer.util
 
-import com.halilibo.composevideoplayer.VideoPlayerState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 
 @ExperimentalCoroutinesApi
-fun MutableStateFlow<VideoPlayerState>.set(block: VideoPlayerState.() -> VideoPlayerState) {
+fun <T> MutableStateFlow<T>.set(block: T.() -> T) {
     this.value = this.value.block()
 }

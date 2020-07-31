@@ -10,10 +10,9 @@ import androidx.ui.graphics.Color
 import androidx.ui.layout.Stack
 import androidx.ui.layout.aspectRatio
 import androidx.ui.layout.fillMaxWidth
-import com.halilibo.composevideoplayer.MediaControlButtons
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
-val VideoPlayerControllerAmbient = ambientOf<VideoPlayerController> { error("VideoPlayerController is not initialized") }
+internal val VideoPlayerControllerAmbient = ambientOf<VideoPlayerController> { error("VideoPlayerController is not initialized") }
 
 @ExperimentalCoroutinesApi
 @Composable
@@ -27,29 +26,29 @@ fun VideoPlayer(
 ): MediaPlaybackControls {
     val context = ContextAmbient.current
     val controller = remember {
-        VideoPlayerController(context, source)
+        VideoPlayerController(context)
     }
 
-    onPreCommit(source) {
+    onCommit(source) {
         controller.setSource(source)
     }
 
-    onPreCommit(controlsEnabled, gesturesEnabled, controlsVisible) {
+    onCommit(controlsEnabled, gesturesEnabled, controlsVisible) {
         controller.enableControls(controlsEnabled)
         controller.enableGestures(gesturesEnabled)
         if(controlsVisible) controller.showControls() else controller.hideControls()
     }
 
     onCommit(backgroundColor) {
-        controller.playerViewBackgroundColor = backgroundColor
+        controller.videoPlayerBackgroundColor = backgroundColor.value.toInt()
     }
-
-    val videoSize by controller.videoSize.collectAsState()
 
     Providers(
             ContentColorAmbient provides Color.White,
             VideoPlayerControllerAmbient provides controller
     ) {
+        val videoSize by controller.collect { videoSize }
+
         Stack(modifier = Modifier.fillMaxWidth()
                 .drawBackground(color = backgroundColor)
                 .aspectRatio(videoSize.width / videoSize.height)

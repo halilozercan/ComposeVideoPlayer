@@ -10,7 +10,6 @@ import androidx.ui.foundation.Text
 import androidx.ui.geometry.Offset
 import androidx.ui.graphics.Shadow
 import androidx.ui.layout.*
-import androidx.ui.material.LinearProgressIndicator
 import androidx.ui.material.icons.Icons
 import androidx.ui.material.icons.filled.FastForward
 import androidx.ui.material.icons.filled.FastRewind
@@ -18,7 +17,6 @@ import androidx.ui.text.TextStyle
 import androidx.ui.text.font.FontWeight
 import androidx.ui.unit.IntSize
 import androidx.ui.unit.TextUnit
-import androidx.ui.unit.dp
 import com.halilibo.composevideoplayer.util.getDurationString
 import kotlinx.coroutines.*
 import java.util.*
@@ -30,9 +28,9 @@ fun MediaControlGestures(
 ) {
     val controller = VideoPlayerControllerAmbient.current
 
-    val controlsEnabled by controller.controlsEnabled.collectAsState()
-    val gesturesEnabled by controller.gesturesEnabled.collectAsState()
-    val controlsVisible by controller.controlsVisible.collectAsState()
+    val controlsEnabled by controller.collect { controlsEnabled }
+    val gesturesEnabled by controller.collect { gesturesEnabled }
+    val controlsVisible by controller.collect { controlsVisible }
 
     if (controlsEnabled && !controlsVisible && gesturesEnabled) {
         Stack(modifier = Modifier + modifier) {
@@ -64,15 +62,15 @@ fun GestureBox(modifier: Modifier = Modifier) {
 
         fun resetState() {
             totalOffset = Offset.Zero
-            controller.draggingProgress.value = null
+            controller.setDraggingProgress(null)
         }
 
         override fun onStart(downPosition: Offset) {
-            wasPlaying = controller.isPlaying.value
+            wasPlaying = controller.currentState { isPlaying }
             controller.pause()
 
-            currentPosition = controller.currentPosition.value
-            duration = controller.duration.value
+            currentPosition = controller.currentState { currentPosition }
+            duration = controller.currentState { duration }
 
             resetState()
         }
@@ -103,9 +101,11 @@ fun GestureBox(modifier: Modifier = Modifier) {
             }
             diffTime = finalTime - currentPosition
 
-            controller.draggingProgress.value = DraggingProgress(
+            controller.setDraggingProgress(
+                DraggingProgress(
                     finalTime = finalTime,
                     diffTime = diffTime
+                )
             )
 
             seekJob = CoroutineScope(Dispatchers.Main).launch {
@@ -162,7 +162,7 @@ fun QuickSeekAnimation(
 ) {
     val controller = VideoPlayerControllerAmbient.current
 
-    val state by controller.quickSeekDirection.collectAsState()
+    val state by controller.collect { quickSeekAction }
 
     Row(modifier = Modifier + modifier) {
         Stack(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -172,7 +172,7 @@ fun QuickSeekAnimation(
                         initState = "start",
                         toState = "end",
                         onStateChangeFinished = {
-                            controller.quickSeekDirection.value = QuickSeekAction.none()
+                            controller.setQuickSeekAction(QuickSeekAction.none())
                         }
                 )
 
@@ -193,7 +193,7 @@ fun QuickSeekAnimation(
                         initState = "start",
                         toState = "end",
                         onStateChangeFinished = {
-                            controller.quickSeekDirection.value = QuickSeekAction.none()
+                            controller.setQuickSeekAction(QuickSeekAction.none())
                         }
                 )
 
@@ -213,16 +213,11 @@ fun QuickSeekAnimation(
 fun DraggingProgressOverlay(modifier: Modifier = Modifier) {
     val controller = VideoPlayerControllerAmbient.current
 
-    val draggingProgress by controller.draggingProgress.collectAsState()
+    val draggingProgress by controller.collect { draggingProgress }
 
     val draggingProgressValue = draggingProgress
 
     if (draggingProgressValue != null) {
-        val dur by controller.duration.collectAsState()
-
-        val progress = if (dur != 0L) (draggingProgressValue.finalTime / dur.toFloat()) else 0f
-        val progressPercentage = if (progress < 0) 0f else if (progress > 1) 1f else progress
-
         Stack(modifier = Modifier + modifier) {
             Text(draggingProgressValue.progressText,
                     fontSize = TextUnit.Companion.Sp(26),

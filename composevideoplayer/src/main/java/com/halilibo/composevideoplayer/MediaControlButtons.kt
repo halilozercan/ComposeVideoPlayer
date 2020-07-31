@@ -4,9 +4,13 @@ import androidx.animation.FloatPropKey
 import androidx.animation.LinearEasing
 import androidx.animation.transitionDefinition
 import androidx.animation.tween
-import androidx.compose.*
+import androidx.compose.Composable
+import androidx.compose.getValue
+import androidx.compose.stateFor
 import androidx.ui.animation.transition
-import androidx.ui.core.*
+import androidx.ui.core.Alignment
+import androidx.ui.core.Modifier
+import androidx.ui.core.drawOpacity
 import androidx.ui.foundation.Box
 import androidx.ui.foundation.Text
 import androidx.ui.foundation.clickable
@@ -24,16 +28,14 @@ import androidx.ui.material.icons.filled.Restore
 import androidx.ui.text.TextStyle
 import androidx.ui.unit.dp
 import com.halilibo.composevideoplayer.PlaybackState
-import com.halilibo.composevideoplayer.ShadowedIcon
-import com.halilibo.composevideoplayer.VideoPlayerControllerAmbient
 import com.halilibo.composevideoplayer.util.getDurationString
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @ExperimentalCoroutinesApi
 object MediaControlButtons {
 
-    private val HIDDEN = "hidden"
-    private val VISIBLE = "visible"
+    private const val HIDDEN = "hidden"
+    private const val VISIBLE = "visible"
 
     private val alpha = FloatPropKey()
     private val transitionDef by lazy {
@@ -65,11 +67,11 @@ object MediaControlButtons {
     operator fun invoke(modifier: Modifier = Modifier) {
         val controller = VideoPlayerControllerAmbient.current
 
-        val controlsEnabled by controller.controlsEnabled.collectAsState()
+        val controlsEnabled by controller.collect { controlsEnabled }
 
         // Dictates the direction of appear animation.
         // If controlsVisible is true, appear animation needs to be triggered.
-        val controlsVisible by controller.controlsVisible.collectAsState()
+        val controlsVisible by controller.collect { controlsVisible }
 
         // When controls are not visible anymore we should remove them from UI tree
         // Controls by default should always be on screen.
@@ -115,8 +117,8 @@ fun PositionAndDurationNumbers(
 ) {
     val controller = VideoPlayerControllerAmbient.current
 
-    val pos by controller.currentPosition.collectAsState()
-    val dur by controller.duration.collectAsState()
+    val pos by controller.collect { currentPosition }
+    val dur by controller.collect { duration }
 
     Column(modifier = Modifier + modifier) {
         Row(
@@ -143,8 +145,8 @@ fun PositionAndDurationNumbers(
 fun PlayPauseButton(modifier: Modifier = Modifier) {
     val controller = VideoPlayerControllerAmbient.current
 
-    val isPlaying by controller.isPlaying.collectAsState()
-    val playbackState by controller.playbackState.collectAsState()
+    val isPlaying by controller.collect { isPlaying }
+    val playbackState by controller.collect { playbackState }
 
     IconButton(
             onClick = { controller.playPauseToggle() },

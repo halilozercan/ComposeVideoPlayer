@@ -1,17 +1,9 @@
 package com.halilibo.composevideoplayer
 
-import android.view.TextureView
 import androidx.compose.Composable
-import androidx.compose.onActive
-import androidx.compose.onDispose
-import androidx.lifecycle.lifecycleScope
-import androidx.ui.core.LifecycleOwnerAmbient
 import androidx.ui.core.Modifier
 import androidx.ui.viewinterop.AndroidView
 import com.google.android.exoplayer2.ui.PlayerView
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 
 @Composable
 fun PlayerSurface(
