@@ -1,31 +1,49 @@
 package com.halilibo.composevideoplayer
 
 import androidx.compose.*
-import androidx.ui.core.Alignment
-import androidx.ui.core.ContextAmbient
-import androidx.ui.core.Modifier
-import androidx.ui.foundation.ContentColorAmbient
-import androidx.ui.foundation.drawBackground
-import androidx.ui.graphics.Color
-import androidx.ui.layout.Stack
-import androidx.ui.layout.aspectRatio
-import androidx.ui.layout.fillMaxWidth
+import androidx.compose.foundation.AmbientContentColor
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.savedinstancestate.Saver
+import androidx.compose.runtime.savedinstancestate.SaverScope
+import androidx.compose.runtime.savedinstancestate.rememberSavedInstanceState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ContextAmbient
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 internal val VideoPlayerControllerAmbient = ambientOf<VideoPlayerController> { error("VideoPlayerController is not initialized") }
 
-@ExperimentalCoroutinesApi
+@OptIn(ExperimentalCoroutinesApi::class)
 @Composable
 fun VideoPlayer(
-        source: VideoPlayerSource,
-        backgroundColor: Color = Color.Black,
-        controlsEnabled: Boolean = true,
-        controlsVisible: Boolean = true,
-        gesturesEnabled: Boolean = true,
-        modifier: Modifier = Modifier
+    source: VideoPlayerSource,
+    backgroundColor: Color = Color.Black,
+    controlsEnabled: Boolean = true,
+    controlsVisible: Boolean = true,
+    gesturesEnabled: Boolean = true,
+    modifier: Modifier = Modifier
 ): MediaPlaybackControls {
     val context = ContextAmbient.current
-    val controller = remember {
+    val controller = rememberSavedInstanceState(
+        saver = object: Saver<VideoPlayerController, VideoPlayerUiState> {
+            override fun restore(value: VideoPlayerUiState): VideoPlayerController? {
+                return VideoPlayerController(
+                    context = context,
+                    initialState = value
+                )
+            }
+
+            override fun SaverScope.save(value: VideoPlayerController): VideoPlayerUiState? {
+                return value.currentState { this }
+            }
+        }) {
+
         VideoPlayerController(context)
     }
 
@@ -33,8 +51,11 @@ fun VideoPlayer(
         controller.setSource(source)
     }
 
-    onCommit(controlsEnabled, gesturesEnabled, controlsVisible) {
+    onCommit(controlsEnabled) {
         controller.enableControls(controlsEnabled)
+    }
+
+    onCommit(gesturesEnabled, controlsVisible) {
         controller.enableGestures(gesturesEnabled)
         if(controlsVisible) controller.showControls() else controller.hideControls()
     }
@@ -44,23 +65,23 @@ fun VideoPlayer(
     }
 
     Providers(
-            ContentColorAmbient provides Color.White,
+            AmbientContentColor provides Color.White,
             VideoPlayerControllerAmbient provides controller
     ) {
         val videoSize by controller.collect { videoSize }
 
-        Stack(modifier = Modifier.fillMaxWidth()
-                .drawBackground(color = backgroundColor)
-                .aspectRatio(videoSize.width / videoSize.height)
-                + modifier) {
+        Box(modifier = Modifier.fillMaxWidth()
+                .background(color = backgroundColor)
+                .aspectRatio(videoSize.first / videoSize.second)
+            .then(modifier)) {
 
-            PlayerSurface(modifier = Modifier.gravity(Alignment.Center)) {
+            PlayerSurface(modifier = Modifier.align(Alignment.Center)) {
                 controller.playerViewAvailable(it)
             }
 
             MediaControlGestures(modifier = Modifier.matchParentSize())
             MediaControlButtons(modifier = Modifier.matchParentSize())
-            ProgressIndicator(modifier = Modifier.gravity(Alignment.BottomCenter))
+            ProgressIndicator(modifier = Modifier.align(Alignment.BottomCenter))
         }
     }
 

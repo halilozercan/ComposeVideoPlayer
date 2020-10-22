@@ -13,4 +13,21 @@ interface MediaPlaybackControls {
     fun quickSeekRewind()
 
     fun seekTo(position: Long)
+
+    companion object {
+        operator fun invoke(): MediaPlaybackControls = object: MediaPlaybackControls {
+            override fun play() { }
+
+            override fun pause() { }
+
+            override fun playPauseToggle() { }
+
+            override fun quickSeekForward() { }
+
+            override fun quickSeekRewind() { }
+
+            override fun seekTo(position: Long) { }
+
+        }
+    }
 }

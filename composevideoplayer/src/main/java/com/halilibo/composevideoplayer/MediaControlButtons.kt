@@ -1,32 +1,29 @@
 package com.halilibo.composevideoplayer
 
-import androidx.animation.FloatPropKey
-import androidx.animation.LinearEasing
-import androidx.animation.transitionDefinition
-import androidx.animation.tween
-import androidx.compose.Composable
-import androidx.compose.getValue
-import androidx.compose.stateFor
-import androidx.ui.animation.transition
-import androidx.ui.core.Alignment
-import androidx.ui.core.Modifier
-import androidx.ui.core.drawOpacity
-import androidx.ui.foundation.Box
-import androidx.ui.foundation.Text
-import androidx.ui.foundation.clickable
-import androidx.ui.foundation.drawBackground
-import androidx.ui.geometry.Offset
-import androidx.ui.graphics.Color
-import androidx.ui.graphics.Shadow
-import androidx.ui.layout.*
-import androidx.ui.material.CircularProgressIndicator
-import androidx.ui.material.IconButton
-import androidx.ui.material.icons.Icons
-import androidx.ui.material.icons.filled.Pause
-import androidx.ui.material.icons.filled.PlayArrow
-import androidx.ui.material.icons.filled.Restore
-import androidx.ui.text.TextStyle
-import androidx.ui.unit.dp
+import androidx.compose.animation.core.FloatPropKey
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.transitionDefinition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.transition
+import androidx.compose.foundation.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.IconButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawOpacity
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.dp
 import com.halilibo.composevideoplayer.PlaybackState
 import com.halilibo.composevideoplayer.util.getDurationString
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -39,7 +36,7 @@ object MediaControlButtons {
 
     private val alpha = FloatPropKey()
     private val transitionDef by lazy {
-        transitionDefinition {
+        transitionDefinition<String> {
             state(HIDDEN) {
                 this[alpha] = 0f
             }
@@ -49,15 +46,15 @@ object MediaControlButtons {
 
             transition(fromState = HIDDEN, toState = VISIBLE) {
                 alpha using tween(
-                        durationMillis = 250,
-                        easing = LinearEasing
+                    durationMillis = 250,
+                    easing = LinearEasing
                 )
             }
 
             transition(fromState = VISIBLE, toState = HIDDEN) {
                 alpha using tween(
-                        durationMillis = 250,
-                        easing = LinearEasing
+                    durationMillis = 250,
+                    easing = LinearEasing
                 )
             }
         }
@@ -76,22 +73,26 @@ object MediaControlButtons {
         // When controls are not visible anymore we should remove them from UI tree
         // Controls by default should always be on screen.
         // Only when disappear animation finishes, controls can be freely cleared from the tree.
-        val (controlsExistOnUITree, setControlsExistOnUITree) = stateFor(controlsVisible) { true }
+        val (controlsExistOnUITree, setControlsExistOnUITree) = remember(controlsVisible) {
+            mutableStateOf(true)
+        }
 
         val appearTransition = transition(
-                transitionDef,
-                initState = HIDDEN,
-                toState = if(controlsVisible) VISIBLE else HIDDEN,
-                onStateChangeFinished = {
-                    setControlsExistOnUITree(it == VISIBLE)
-                }
+            transitionDef,
+            initState = HIDDEN,
+            toState = if (controlsVisible) VISIBLE else HIDDEN,
+            onStateChangeFinished = {
+                setControlsExistOnUITree(it == VISIBLE)
+            }
         )
 
         if (controlsEnabled && controlsExistOnUITree) {
-            Content(modifier = Modifier
+            Content(
+                modifier = Modifier
                     .drawOpacity(appearTransition[alpha])
-                    .drawBackground(Color.Black.copy(alpha = appearTransition[alpha]*0.6f))
-                    + modifier)
+                    .background(Color.Black.copy(alpha = appearTransition[alpha] * 0.6f))
+                        + modifier
+            )
         }
     }
 
@@ -99,13 +100,15 @@ object MediaControlButtons {
     fun Content(modifier: Modifier = Modifier) {
         val controller = VideoPlayerControllerAmbient.current
 
-        Stack(modifier = Modifier + modifier) {
+        Box(modifier = Modifier + modifier) {
 
-            Box(modifier = Modifier.gravity(Alignment.Center).fillMaxSize().clickable(indication = null) {
-                controller.hideControls()
-            })
-            PositionAndDurationNumbers(modifier = Modifier.gravity(Alignment.BottomCenter))
-            PlayPauseButton(modifier = Modifier.gravity(Alignment.Center))
+            Box(
+                modifier = Modifier.align(Alignment.Center).fillMaxSize()
+                    .clickable(indication = null) {
+                        controller.hideControls()
+                    })
+            PositionAndDurationNumbers(modifier = Modifier.align(Alignment.BottomCenter))
+            PlayPauseButton(modifier = Modifier.align(Alignment.Center))
         }
     }
 }
@@ -113,7 +116,7 @@ object MediaControlButtons {
 @ExperimentalCoroutinesApi
 @Composable
 fun PositionAndDurationNumbers(
-        modifier: Modifier = Modifier
+    modifier: Modifier = Modifier
 ) {
     val controller = VideoPlayerControllerAmbient.current
 
@@ -122,20 +125,26 @@ fun PositionAndDurationNumbers(
 
     Column(modifier = Modifier + modifier) {
         Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp)
+            modifier = Modifier.fillMaxWidth().padding(4.dp)
         ) {
-            Text(getDurationString(pos, false),
-                    style = TextStyle(shadow = Shadow(
-                            blurRadius = 8f,
-                            offset = Offset(2f,2f))
-                    ))
+            Text(
+                getDurationString(pos, false),
+                style = TextStyle(
+                    shadow = Shadow(
+                        blurRadius = 8f,
+                        offset = Offset(2f, 2f)
+                    )
+                )
+            )
             Box(modifier = Modifier.weight(1f))
             Text(
-                    getDurationString(dur, false),
-                    style = TextStyle(shadow = Shadow(
-                            blurRadius = 8f,
-                            offset = Offset(2f,2f))
+                getDurationString(dur, false),
+                style = TextStyle(
+                    shadow = Shadow(
+                        blurRadius = 8f,
+                        offset = Offset(2f, 2f)
                     )
+                )
             )
         }
     }
@@ -149,8 +158,8 @@ fun PlayPauseButton(modifier: Modifier = Modifier) {
     val playbackState by controller.collect { playbackState }
 
     IconButton(
-            onClick = { controller.playPauseToggle() },
-            modifier = Modifier + modifier
+        onClick = { controller.playPauseToggle() },
+        modifier = Modifier + modifier
     ) {
         if (isPlaying) {
             ShadowedIcon(icon = Icons.Filled.Pause)

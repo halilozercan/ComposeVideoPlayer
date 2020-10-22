@@ -1,23 +1,34 @@
 package com.halilibo.composevideoplayer
 
-import androidx.animation.*
-import androidx.compose.*
-import androidx.ui.animation.transition
-import androidx.ui.core.*
-import androidx.ui.core.gesture.*
-import androidx.ui.foundation.Box
-import androidx.ui.foundation.Text
-import androidx.ui.geometry.Offset
-import androidx.ui.graphics.Shadow
-import androidx.ui.layout.*
-import androidx.ui.material.icons.Icons
-import androidx.ui.material.icons.filled.FastForward
-import androidx.ui.material.icons.filled.FastRewind
-import androidx.ui.text.TextStyle
-import androidx.ui.text.font.FontWeight
-import androidx.ui.unit.IntSize
-import androidx.ui.unit.TextUnit
+import android.os.Parcelable
+import androidx.compose.animation.core.FloatPropKey
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.transitionDefinition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.transition
+import androidx.compose.foundation.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.gesture.DragObserver
+import androidx.compose.ui.gesture.doubleTapGestureFilter
+import androidx.compose.ui.gesture.dragGestureFilter
+import androidx.compose.ui.gesture.tapGestureFilter
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.TextUnit
 import com.halilibo.composevideoplayer.util.getDurationString
+import kotlinx.android.parcel.Parcelize
 import kotlinx.coroutines.*
 import java.util.*
 import kotlin.math.abs
@@ -33,7 +44,7 @@ fun MediaControlGestures(
     val controlsVisible by controller.collect { controlsVisible }
 
     if (controlsEnabled && !controlsVisible && gesturesEnabled) {
-        Stack(modifier = Modifier + modifier) {
+        Box(modifier = modifier) {
             GestureBox()
             QuickSeekAnimation()
             DraggingProgressOverlay(modifier = modifier)
@@ -46,7 +57,7 @@ fun MediaControlGestures(
 fun GestureBox(modifier: Modifier = Modifier) {
     val controller = VideoPlayerControllerAmbient.current
 
-    lateinit var boxSize: IntSize
+    var boxSize: IntSize = IntSize.Zero
 
     val dragObserver = object : DragObserver {
         var wasPlaying: Boolean = true
@@ -119,90 +130,91 @@ fun GestureBox(modifier: Modifier = Modifier) {
     }
 
     Row(modifier = Modifier.fillMaxSize()
-            .onPositioned { boxSize = it.size }
-            .dragGestureFilter(
-                    dragObserver = dragObserver,
-                    canDrag = {
-                        it.name == "LEFT" || it.name == "RIGHT"
-                    }
-            )
+        // TODO
+        .onGloballyPositioned { boxSize = it.size }
+        .dragGestureFilter(
+            dragObserver = dragObserver,
+            canDrag = {
+                it.name == "LEFT" || it.name == "RIGHT"
+            }
+        )
             + modifier) {
 
         val commonModifier = Modifier.fillMaxHeight()
-                .tapGestureFilter {
-                    controller.showControls()
-                }
+            .tapGestureFilter {
+                controller.showControls()
+            }
         Box(
             modifier = commonModifier
-                    .weight(2f)
-                    .doubleTapGestureFilter {
-                        controller.quickSeekRewind()
-                    }
+                .weight(2f)
+                .doubleTapGestureFilter {
+                    controller.quickSeekRewind()
+                }
         )
 
         // Center where double tap does not exist
         Box(
-                modifier = commonModifier
-                        .weight(1f)
+            modifier = commonModifier
+                .weight(1f)
         )
 
         Box(
-                modifier = commonModifier
-                        .weight(2f)
-                        .doubleTapGestureFilter {
-                            controller.quickSeekForward()
-                        }
+            modifier = commonModifier
+                .weight(2f)
+                .doubleTapGestureFilter {
+                    controller.quickSeekForward()
+                }
         )
     }
 }
 
 @Composable
 fun QuickSeekAnimation(
-        modifier: Modifier = Modifier
+    modifier: Modifier = Modifier
 ) {
     val controller = VideoPlayerControllerAmbient.current
 
     val state by controller.collect { quickSeekAction }
 
     Row(modifier = Modifier + modifier) {
-        Stack(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if(state.direction == QuickSeekDirection.Rewind) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            if (state.direction == QuickSeekDirection.Rewind) {
                 val transitionState = transition(
-                        definition = transitionDef,
-                        initState = "start",
-                        toState = "end",
-                        onStateChangeFinished = {
-                            controller.setQuickSeekAction(QuickSeekAction.none())
-                        }
+                    definition = transitionDef,
+                    initState = "start",
+                    toState = "end",
+                    onStateChangeFinished = {
+                        controller.setQuickSeekAction(QuickSeekAction.none())
+                    }
                 )
 
                 val realAlpha = 1 - abs(1 - transitionState[alpha])
                 ShadowedIcon(
-                        Icons.Filled.FastRewind,
-                        modifier = Modifier
-                                .drawLayer(alpha = realAlpha)
-                                .gravity(Alignment.Center)
+                    Icons.Filled.FastRewind,
+                    modifier = Modifier
+                        .drawLayer(alpha = realAlpha)
+                        .align(Alignment.Center)
                 )
             }
         }
 
-        Stack(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if(state.direction == QuickSeekDirection.Forward) {
+        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            if (state.direction == QuickSeekDirection.Forward) {
                 val transitionState = transition(
-                        definition = transitionDef,
-                        initState = "start",
-                        toState = "end",
-                        onStateChangeFinished = {
-                            controller.setQuickSeekAction(QuickSeekAction.none())
-                        }
+                    definition = transitionDef,
+                    initState = "start",
+                    toState = "end",
+                    onStateChangeFinished = {
+                        controller.setQuickSeekAction(QuickSeekAction.none())
+                    }
                 )
 
                 val realAlpha = 1 - abs(1 - transitionState[alpha])
                 ShadowedIcon(
-                        Icons.Filled.FastForward,
-                        modifier = Modifier
-                                .drawLayer(alpha = realAlpha)
-                                .gravity(Alignment.Center)
+                    Icons.Filled.FastForward,
+                    modifier = Modifier
+                        .drawLayer(alpha = realAlpha)
+                        .gravity(Alignment.Center)
                 )
             }
         }
@@ -218,15 +230,18 @@ fun DraggingProgressOverlay(modifier: Modifier = Modifier) {
     val draggingProgressValue = draggingProgress
 
     if (draggingProgressValue != null) {
-        Stack(modifier = Modifier + modifier) {
-            Text(draggingProgressValue.progressText,
-                    fontSize = TextUnit.Companion.Sp(26),
-                    fontWeight = FontWeight.Bold,
-                    style = TextStyle(shadow = Shadow(
-                            blurRadius = 8f,
-                            offset = Offset(2f, 2f))
-                    ),
-                    modifier = Modifier.gravity(Alignment.Center)
+        Box(modifier = Modifier + modifier) {
+            Text(
+                draggingProgressValue.progressText,
+                fontSize = TextUnit.Companion.Sp(26),
+                fontWeight = FontWeight.Bold,
+                style = TextStyle(
+                    shadow = Shadow(
+                        blurRadius = 8f,
+                        offset = Offset(2f, 2f)
+                    )
+                ),
+                modifier = Modifier.gravity(Alignment.Center)
             )
         }
     }
@@ -234,7 +249,7 @@ fun DraggingProgressOverlay(modifier: Modifier = Modifier) {
 }
 
 private val alpha = FloatPropKey()
-private val transitionDef = transitionDefinition {
+private val transitionDef = transitionDefinition<String> {
     state("start") {
         this[alpha] = 0f
     }
@@ -244,21 +259,27 @@ private val transitionDef = transitionDefinition {
 
     transition(fromState = "start", toState = "end") {
         alpha using tween(
-                durationMillis = 500,
-                easing = LinearEasing
+            durationMillis = 500,
+            easing = LinearEasing
         )
     }
 
     snapTransition("end" to "start")
 }
 
+@Parcelize
 data class DraggingProgress(
-        val finalTime: Float,
-        val diffTime: Float
-) {
+    val finalTime: Float,
+    val diffTime: Float
+) : Parcelable {
     val progressText: String
         get() = "${getDurationString(finalTime.toLong(), false)} " +
-                "[${if (diffTime < 0) "-" else "+"}${getDurationString(abs(diffTime.toLong()), false)}]"
+                "[${if (diffTime < 0) "-" else "+"}${
+                    getDurationString(
+                        abs(diffTime.toLong()),
+                        false
+                    )
+                }]"
 }
 
 enum class QuickSeekDirection {
@@ -267,9 +288,10 @@ enum class QuickSeekDirection {
     Forward
 }
 
+@Parcelize
 data class QuickSeekAction(
-        val direction: QuickSeekDirection
-) {
+    val direction: QuickSeekDirection
+) : Parcelable {
     // Each action is unique
     override fun equals(other: Any?): Boolean {
         return false

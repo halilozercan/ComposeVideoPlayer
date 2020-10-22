@@ -2,11 +2,11 @@ package com.halilibo.composevideoplayer
 
 import android.content.Context
 import android.net.Uri
-import androidx.compose.Composable
-import androidx.compose.State
-import androidx.compose.collectAsState
-import androidx.ui.geometry.Size
-import androidx.ui.graphics.Color
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.MediaSource
@@ -20,19 +20,32 @@ import com.google.android.exoplayer2.video.VideoListener
 import com.halilibo.composevideoplayer.util.FlowDebouncer
 import com.halilibo.composevideoplayer.util.set
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.CoroutineContext
 
 @ExperimentalCoroutinesApi
 internal class VideoPlayerController(
     private val context: Context,
-    override val coroutineContext: CoroutineContext = Dispatchers.Main
+    private val initialState: VideoPlayerUiState = VideoPlayerUiState(),
+    override val coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Main
 ) : MediaPlaybackControls, CoroutineScope {
 
-    private val state = MutableStateFlow(VideoPlayerUiState())
+    // InitialState -> init { }
+    // PlayerViewReady -> playerViewReady
+    // SourceReady
+    // PlayerReady
+
+    private val state = MutableStateFlow(initialState)
+
+    /**
+     * Some properties in initial state are not applicable until player is ready.
+     * These are kept in this container. Once the player is ready for the first time,
+     * they are executed and removed.
+     */
+    private var initialStateRunner: (() -> Unit)? = {
+        exoPlayer.seekTo(initialState.currentPosition)
+    }
 
     fun <T> currentState(filter: VideoPlayerUiState.() -> T): T {
         return state.value.filter()
@@ -40,7 +53,11 @@ internal class VideoPlayerController(
 
     @Composable
     fun <T> collect(filter: VideoPlayerUiState.() -> T): State<T> {
-        return state.map { it.filter() }.collectAsState(initial = VideoPlayerUiState().filter())
+        return remember {
+            state.map { it.filter() }
+        }.collectAsState(
+            initial = state.value.filter()
+        )
     }
 
     var videoPlayerBackgroundColor: Int = DefaultVideoPlayerBackgroundColor.value.toInt()
@@ -52,10 +69,27 @@ internal class VideoPlayerController(
     private lateinit var source: VideoPlayerSource
     private var playerView: PlayerView? = null
 
+    private var updateDurationAndPositionJob: Job? = null
     private val playerEventListener = object : Player.EventListener {
 
         override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
             super.onPlayerStateChanged(playWhenReady, playbackState)
+
+            if(PlaybackState.of(playbackState) == PlaybackState.READY) {
+                initialStateRunner = initialStateRunner?.let {
+                    it.invoke()
+                    null
+                }
+
+                updateDurationAndPositionJob?.cancel()
+                updateDurationAndPositionJob = launch {
+                    while (this.isActive) {
+                        updateDurationAndPosition()
+                        delay(250)
+                    }
+                }
+            }
+
             state.set {
                 copy(
                     isPlaying = playWhenReady,
@@ -75,7 +109,7 @@ internal class VideoPlayerController(
             super.onVideoSizeChanged(width, height, unappliedRotationDegrees, pixelWidthHeightRatio)
 
             state.set {
-                copy(videoSize = Size(width.toFloat(), height.toFloat()))
+                copy(videoSize = width.toFloat() to height.toFloat())
             }
         }
     }
@@ -86,16 +120,9 @@ internal class VideoPlayerController(
     private val exoPlayer = SimpleExoPlayer.Builder(context)
         .build()
         .apply {
-            playWhenReady = true
+            playWhenReady = initialState.isPlaying
             addListener(playerEventListener)
             addVideoListener(videoListener)
-
-            launch {
-                while (this.isActive) {
-                    updateDurationAndPosition()
-                    delay(250)
-                }
-            }
         }
 
     /**
@@ -110,6 +137,8 @@ internal class VideoPlayerController(
     private val previewSeekDebouncer = FlowDebouncer<Long>(200L)
 
     init {
+        exoPlayer.playWhenReady = initialState.isPlaying
+
         launch {
             previewSeekDebouncer.collect { position ->
                 previewExoPlayer.seekTo(position)

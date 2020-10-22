@@ -1,24 +1,26 @@
 package com.halilibo.composevideoplayer
 
 import androidx.compose.*
-import androidx.ui.core.*
-import androidx.ui.core.gesture.DragObserver
-import androidx.ui.core.gesture.dragSlopExceededGestureFilter
-import androidx.ui.core.gesture.pressIndicatorGestureFilter
-import androidx.ui.core.gesture.rawDragGestureFilter
-import androidx.ui.core.gesture.scrollorientationlocking.Orientation
-import androidx.ui.foundation.Box
-import androidx.ui.foundation.Canvas
-import androidx.ui.foundation.Text
-import androidx.ui.geometry.Offset
-import androidx.ui.graphics.Color
-import androidx.ui.graphics.Shadow
-import androidx.ui.layout.*
-import androidx.ui.material.LinearProgressIndicator
-import androidx.ui.material.MaterialTheme
-import androidx.ui.text.TextStyle
-import androidx.ui.unit.IntSize
-import androidx.ui.unit.dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.LinearProgressIndicator
+import androidx.compose.material.MaterialTheme
+import androidx.compose.runtime.*
+import androidx.compose.ui.*
+import androidx.compose.ui.draw.drawShadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.gesture.DragObserver
+import androidx.compose.ui.gesture.dragSlopExceededGestureFilter
+import androidx.compose.ui.gesture.pressIndicatorGestureFilter
+import androidx.compose.ui.gesture.rawDragGestureFilter
+import androidx.compose.ui.gesture.scrollorientationlocking.Orientation
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.DensityAmbient
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.dp
 import com.halilibo.composevideoplayer.util.getDurationString
 
 @Composable
@@ -36,14 +38,15 @@ fun SeekBar(
     secondaryColor: Color = Color.White.copy(alpha = 0.6f),
     modifier: Modifier = Modifier
 ) {
-    var boxSize by state { IntSize(1, 1) }
+    // TODO
+    var boxSize by remember { mutableStateOf(IntSize(1, 1)) }
 
-    var onGoingDrag by state { false }
+    var onGoingDrag by remember { mutableStateOf(false) }
 
     val percentage = progress.coerceAtMost(max).toFloat() / max.coerceAtLeast(1L).toFloat()
 
-    var indicatorOffsetStateByPercentage by stateFor(onGoingDrag) {
-        Offset(percentage * boxSize.width.toFloat(), 0f)
+    var indicatorOffsetStateByPercentage by remember(onGoingDrag) {
+        mutableStateOf(Offset(percentage * boxSize.width.toFloat(), 0f))
     }
 
     if(!onGoingDrag) {
@@ -73,11 +76,11 @@ fun SeekBar(
             val popupSeekerOffsetXDp = with(DensityAmbient.current) { popupSeekerOffsetX.toDp() }
 
             Column(
-                horizontalGravity = Alignment.CenterHorizontally,
+                horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .offset(x = popupSeekerOffsetXDp)
                     .drawLayer(alpha = if(popupSize == IntSize.Zero) 0f else 1f)
-                    .onPositioned {
+                    .onGloballyPositioned {
                         if(popupSize != it.size) {
                             popupSize = it.size
                         }
@@ -96,7 +99,8 @@ fun SeekBar(
                         style = TextStyle(shadow = Shadow(
                             blurRadius = 8f,
                             offset = Offset(2f, 2f))
-                        ))
+                        )
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -179,7 +183,7 @@ fun SeekBar(
                 modifier = Modifier.fillMaxWidth().gravity(Alignment.Center)
             ) {
                 LinearProgressIndicator(
-                    modifier = Modifier.weight(1f).onPositioned {
+                    modifier = Modifier.weight(1f).onGloballyPositioned {
                         if (boxSize != it.size) {
                             boxSize = it.size
                         }
@@ -265,7 +269,7 @@ fun Indicator(
     color: Color = MaterialTheme.colors.primary,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = Modifier + modifier) {
+    Canvas(modifier = modifier) {
         val radius = size.height / 2
         drawCircle(color, radius)
     }

@@ -1,17 +1,18 @@
 package com.halilibo.composevideoplayer
 
-import androidx.compose.Composable
-import androidx.compose.getValue
-import androidx.ui.core.Modifier
-import androidx.ui.foundation.drawBackground
-import androidx.ui.graphics.Color
-import androidx.ui.layout.height
-import androidx.ui.layout.width
-import androidx.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
 
 @Composable
 fun ProgressIndicator(
-        modifier: Modifier = Modifier
+    modifier: Modifier = Modifier
 ) {
     val controller = VideoPlayerControllerAmbient.current
     val progress by controller.collect { currentPosition }
@@ -32,11 +33,11 @@ fun ProgressIndicator(
             controller.seekTo(it)
         },
         secondaryProgress = secondaryProgress,
-        seekerPopup = @Composable() {
+        seekerPopup = {
             PlayerSurface(modifier = Modifier
                 .height(48.dp)
-                .width(48.dp * videoSize.width / videoSize.height)
-                .drawBackground(Color.DarkGray)
+                .width(48.dp * videoSize.first / videoSize.second)
+                .background(Color.DarkGray)
             ) {
                 controller.previewPlayerViewAvailable(it)
             }
