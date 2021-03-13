@@ -14,34 +14,32 @@ import androidx.compose.ui.unit.dp
 fun ProgressIndicator(
     modifier: Modifier = Modifier
 ) {
-    val controller = VideoPlayerControllerAmbient.current
-    val progress by controller.collect { currentPosition }
-    val secondaryProgress by controller.collect { secondaryProgress }
-    val max by controller.collect { duration }
-    val controlsVisible by controller.collect { controlsVisible }
-    val controlsEnabled by controller.collect { controlsEnabled }
-    val videoSize by controller.collect { videoSize }
+    val controller = LocalVideoPlayerController.current
+    val videoPlayerUiState by controller.collect()
 
-    SeekBar(
-        progress = progress,
-        max = max,
-        enabled = controlsVisible && controlsEnabled,
-        onSeek = {
-            controller.previewSeekTo(it)
-        },
-        onSeekStopped = {
-            controller.seekTo(it)
-        },
-        secondaryProgress = secondaryProgress,
-        seekerPopup = {
-            PlayerSurface(modifier = Modifier
-                .height(48.dp)
-                .width(48.dp * videoSize.first / videoSize.second)
-                .background(Color.DarkGray)
-            ) {
-                controller.previewPlayerViewAvailable(it)
-            }
-        },
-        modifier = modifier
-    )
+    with(videoPlayerUiState) {
+        SeekBar(
+            progress = currentPosition,
+            max = duration,
+            enabled = controlsVisible && controlsEnabled,
+            onSeek = {
+                controller.previewSeekTo(it)
+            },
+            onSeekStopped = {
+                controller.seekTo(it)
+            },
+            secondaryProgress = secondaryProgress,
+            seekerPopup = {
+                PlayerSurface(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .width(48.dp * videoSize.first / videoSize.second)
+                        .background(Color.DarkGray)
+                ) {
+                    controller.previewPlayerViewAvailable(it)
+                }
+            },
+            modifier = modifier
+        )
+    }
 }

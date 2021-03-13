@@ -1,11 +1,10 @@
 package com.halilibo.composevideoplayer
 
 import android.os.Parcelable
-import androidx.compose.ui.geometry.Size
 import kotlinx.android.parcel.Parcelize
 
 @Parcelize
-data class VideoPlayerUiState(
+data class VideoPlayerState(
     val isPlaying: Boolean = true,
     val controlsVisible: Boolean = true,
     val controlsEnabled: Boolean = true,

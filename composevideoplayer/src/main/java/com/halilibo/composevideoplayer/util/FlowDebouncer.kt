@@ -1,34 +1,22 @@
 package com.halilibo.composevideoplayer.util
 
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.BroadcastChannel
-import kotlinx.coroutines.channels.consumeEach
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
-import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
-@ObsoleteCoroutinesApi
-@FlowPreview
-@ExperimentalCoroutinesApi
-class FlowDebouncer<T>(
-    timeoutMillis: Long,
-    private val context: CoroutineContext = EmptyCoroutineContext
-): Flow<T>, CoroutineScope by CoroutineScope(context) {
+class FlowDebouncer<T>(timeoutMillis: Long): Flow<T> {
 
-    private val broadcastChannel: BroadcastChannel<T> = BroadcastChannel(1)
-    private val flow: Flow<T> = channelFlow {
-        broadcastChannel.consumeEach {
-            send(it)
-        }
-    }.debounce(timeoutMillis)
+    private val sourceChannel: Channel<T> = Channel(capacity = 1)
 
-    fun put(item: T) {
-        launch {
-            broadcastChannel.send(item)
-        }
+    @OptIn(FlowPreview::class)
+    private val flow: Flow<T> = sourceChannel.consumeAsFlow().debounce(timeoutMillis)
+
+    suspend fun put(item: T) {
+        sourceChannel.send(item)
     }
 
     @InternalCoroutinesApi

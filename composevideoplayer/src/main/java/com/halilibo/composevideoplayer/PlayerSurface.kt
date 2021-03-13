@@ -10,16 +10,13 @@ fun PlayerSurface(
     modifier: Modifier = Modifier,
     onPlayerViewAvailable: (PlayerView) -> Unit = {}
 ) {
-
     AndroidView(
-        viewBlock = { context ->
+        factory = { context ->
             PlayerView(context).apply {
                 useController = false
+                onPlayerViewAvailable(this)
             }
         },
-        modifier = modifier,
-        update = {
-            onPlayerViewAvailable(it)
-        }
+        modifier = modifier
     )
 }

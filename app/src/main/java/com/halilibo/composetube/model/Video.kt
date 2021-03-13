@@ -1,4 +1,4 @@
-package com.halilibo.composetube
+package com.halilibo.composetube.model
 
 import android.os.Parcelable
 import kotlinx.android.parcel.Parcelize
@@ -8,7 +8,8 @@ data class Video(
     val description: String,
     val sources: List<String>,
     val subtitle: String,
-    val title: String
+    val title: String,
+    val thumb: String
 ): Parcelable
 
 @Parcelize

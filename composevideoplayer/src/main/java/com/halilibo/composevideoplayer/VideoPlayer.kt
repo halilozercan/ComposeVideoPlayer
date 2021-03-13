@@ -1,93 +1,98 @@
 package com.halilibo.composevideoplayer
 
-import androidx.compose.*
-import androidx.compose.foundation.AmbientContentColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material.LocalContentColor
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.savedinstancestate.Saver
-import androidx.compose.runtime.savedinstancestate.SaverScope
-import androidx.compose.runtime.savedinstancestate.rememberSavedInstanceState
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.SaverScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ContextAmbient
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import androidx.compose.ui.platform.LocalContext
 
-internal val VideoPlayerControllerAmbient = ambientOf<VideoPlayerController> { error("VideoPlayerController is not initialized") }
+internal val LocalVideoPlayerController =
+    compositionLocalOf<DefaultVideoPlayerController> { error("VideoPlayerController is not initialized") }
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @Composable
-fun VideoPlayer(
-    source: VideoPlayerSource,
-    backgroundColor: Color = Color.Black,
-    controlsEnabled: Boolean = true,
-    controlsVisible: Boolean = true,
-    gesturesEnabled: Boolean = true,
-    modifier: Modifier = Modifier
-): MediaPlaybackControls {
-    val context = ContextAmbient.current
-    val controller = rememberSavedInstanceState(
-        saver = object: Saver<VideoPlayerController, VideoPlayerUiState> {
-            override fun restore(value: VideoPlayerUiState): VideoPlayerController? {
-                return VideoPlayerController(
+fun rememberVideoPlayerController(
+    source: VideoPlayerSource? = null
+): VideoPlayerController {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    return rememberSaveable(
+        context, coroutineScope,
+        saver = object : Saver<DefaultVideoPlayerController, VideoPlayerState> {
+            override fun restore(value: VideoPlayerState): DefaultVideoPlayerController {
+                return DefaultVideoPlayerController(
                     context = context,
-                    initialState = value
+                    initialState = value,
+                    coroutineScope = coroutineScope
                 )
             }
 
-            override fun SaverScope.save(value: VideoPlayerController): VideoPlayerUiState? {
-                return value.currentState { this }
+            override fun SaverScope.save(value: DefaultVideoPlayerController): VideoPlayerState {
+                return value.currentState { it }
             }
-        }) {
+        },
+        init = {
+            DefaultVideoPlayerController(
+                context = context,
+                initialState = VideoPlayerState(),
+                coroutineScope = coroutineScope
+            ).apply {
+                source?.let { setSource(it) }
+            }
+        }
+    )
+}
 
-        VideoPlayerController(context)
+@OptIn(ExperimentalUnsignedTypes::class)
+@Composable
+fun VideoPlayer(
+    videoPlayerController: VideoPlayerController,
+    modifier: Modifier = Modifier,
+    controlsEnabled: Boolean = true,
+    gesturesEnabled: Boolean = true,
+    backgroundColor: Color = Color.Black
+) {
+    require(videoPlayerController is DefaultVideoPlayerController) {
+        "Use [rememberVideoPlayerController] to create an instance of [VideoPlayerController]"
     }
 
-    onCommit(source) {
-        controller.setSource(source)
+    SideEffect {
+        videoPlayerController.videoPlayerBackgroundColor = backgroundColor.value.toInt()
+        videoPlayerController.enableControls(controlsEnabled)
+        videoPlayerController.enableGestures(gesturesEnabled)
     }
 
-    onCommit(controlsEnabled) {
-        controller.enableControls(controlsEnabled)
-    }
-
-    onCommit(gesturesEnabled, controlsVisible) {
-        controller.enableGestures(gesturesEnabled)
-        if(controlsVisible) controller.showControls() else controller.hideControls()
-    }
-
-    onCommit(backgroundColor) {
-        controller.videoPlayerBackgroundColor = backgroundColor.value.toInt()
-    }
-
-    Providers(
-            AmbientContentColor provides Color.White,
-            VideoPlayerControllerAmbient provides controller
+    CompositionLocalProvider(
+        LocalContentColor provides Color.White,
+        LocalVideoPlayerController provides videoPlayerController
     ) {
-        val videoSize by controller.collect { videoSize }
+        val aspectRatio by videoPlayerController.collect { videoSize.first / videoSize.second }
 
-        Box(modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
                 .background(color = backgroundColor)
-                .aspectRatio(videoSize.first / videoSize.second)
-            .then(modifier)) {
-
-            PlayerSurface(modifier = Modifier.align(Alignment.Center)) {
-                controller.playerViewAvailable(it)
+                .aspectRatio(aspectRatio)
+                .then(modifier)
+        ) {
+            PlayerSurface {
+                videoPlayerController.playerViewAvailable(it)
             }
 
             MediaControlGestures(modifier = Modifier.matchParentSize())
             MediaControlButtons(modifier = Modifier.matchParentSize())
-            ProgressIndicator(modifier = Modifier.align(Alignment.BottomCenter))
+            ProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+            )
         }
     }
-
-    onDispose {
-        controller.onDispose()
-    }
-
-    return controller
 }

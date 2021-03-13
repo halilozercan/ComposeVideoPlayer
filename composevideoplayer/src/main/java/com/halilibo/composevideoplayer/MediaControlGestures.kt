@@ -1,35 +1,36 @@
 package com.halilibo.composevideoplayer
 
 import android.os.Parcelable
-import androidx.compose.animation.core.FloatPropKey
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.transitionDefinition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.transition
-import androidx.compose.foundation.Text
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.gesture.DragObserver
-import androidx.compose.ui.gesture.doubleTapGestureFilter
-import androidx.compose.ui.gesture.dragGestureFilter
-import androidx.compose.ui.gesture.tapGestureFilter
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.consumePositionChange
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import com.halilibo.composevideoplayer.util.getDurationString
 import kotlinx.android.parcel.Parcelize
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.*
 import kotlin.math.abs
 
@@ -37,17 +38,22 @@ import kotlin.math.abs
 fun MediaControlGestures(
     modifier: Modifier = Modifier
 ) {
-    val controller = VideoPlayerControllerAmbient.current
+    val controller = LocalVideoPlayerController.current
 
     val controlsEnabled by controller.collect { controlsEnabled }
     val gesturesEnabled by controller.collect { gesturesEnabled }
     val controlsVisible by controller.collect { controlsVisible }
+    val quickSeekDirection by controller.collect { quickSeekAction.direction }
+    val draggingProgress by controller.collect { draggingProgress }
 
     if (controlsEnabled && !controlsVisible && gesturesEnabled) {
-        Box(modifier = modifier) {
+        Box(
+            modifier = modifier
+                .draggingProgressOverlay(draggingProgress)
+                .quickSeekAnimation(quickSeekDirection) {
+                    controller.setQuickSeekAction(QuickSeekAction.none())
+                }) {
             GestureBox()
-            QuickSeekAnimation()
-            DraggingProgressOverlay(modifier = modifier)
         }
     }
 
@@ -55,185 +61,179 @@ fun MediaControlGestures(
 
 @Composable
 fun GestureBox(modifier: Modifier = Modifier) {
-    val controller = VideoPlayerControllerAmbient.current
+    val controller = LocalVideoPlayerController.current
 
-    var boxSize: IntSize = IntSize.Zero
+    val coroutineScope = rememberCoroutineScope()
 
-    val dragObserver = object : DragObserver {
-        var wasPlaying: Boolean = true
-        var totalOffset = Offset.Zero
-        var diffTime = -1f
+    Box(modifier = Modifier
+        .fillMaxSize()
+        .pointerInput(controller) {
+            var wasPlaying = true
+            var totalOffset = Offset.Zero
+            var diffTime = -1f
 
-        var duration: Long = 0
-        var currentPosition: Long = 0
+            var duration: Long = 0
+            var currentPosition: Long = 0
 
-        // When this job completes, it seeks to desired position.
-        // It gets cancelled if delay does not complete
-        var seekJob: Job? = null
+            // When this job completes, it seeks to desired position.
+            // It gets cancelled if delay does not complete
+            var seekJob: Job? = null
 
-        fun resetState() {
-            totalOffset = Offset.Zero
-            controller.setDraggingProgress(null)
-        }
-
-        override fun onStart(downPosition: Offset) {
-            wasPlaying = controller.currentState { isPlaying }
-            controller.pause()
-
-            currentPosition = controller.currentState { currentPosition }
-            duration = controller.currentState { duration }
-
-            resetState()
-        }
-
-        override fun onStop(velocity: Offset) {
-            if (wasPlaying) controller.play()
-            resetState()
-        }
-
-        override fun onDrag(dragDistance: Offset): Offset {
-            seekJob?.cancel()
-
-            totalOffset += dragDistance
-
-            val diff = totalOffset.x
-
-            diffTime = if (duration <= 60_000) {
-                duration.toFloat() * diff / boxSize.width.toFloat()
-            } else {
-                60_000.toFloat() * diff / boxSize.width.toFloat()
+            fun resetState() {
+                totalOffset = Offset.Zero
+                controller.setDraggingProgress(null)
             }
 
-            var finalTime = currentPosition + diffTime
-            if (finalTime < 0) {
-                finalTime = 0f
-            } else if (finalTime > duration) {
-                finalTime = duration.toFloat()
-            }
-            diffTime = finalTime - currentPosition
+            detectMediaPlayerGesture(
+                onDoubleTap = { doubleTapPosition ->
+                    when {
+                        doubleTapPosition.x < size.width * 0.4f -> {
+                            controller.quickSeekRewind()
+                        }
+                        doubleTapPosition.x > size.width * 0.6f -> {
+                            controller.quickSeekForward()
+                        }
+                    }
+                },
+                onTap = {
+                    controller.showControls()
+                },
+                onDragStart = { offset ->
+                    wasPlaying = controller.currentState { it.isPlaying }
+                    controller.pause()
 
-            controller.setDraggingProgress(
-                DraggingProgress(
-                    finalTime = finalTime,
-                    diffTime = diffTime
-                )
+                    currentPosition = controller.currentState { it.currentPosition }
+                    duration = controller.currentState { it.duration }
+
+                    resetState()
+                },
+                onDragEnd = {
+                    if (wasPlaying) controller.play()
+                    resetState()
+                },
+                onDrag = { dragAmount: Float ->
+                    seekJob?.cancel()
+
+                    totalOffset += Offset(x = dragAmount, y = 0f)
+
+                    val diff = totalOffset.x
+
+                    diffTime = if (duration <= 60_000) {
+                        duration.toFloat() * diff / size.width.toFloat()
+                    } else {
+                        60_000.toFloat() * diff / size.width.toFloat()
+                    }
+
+                    var finalTime = currentPosition + diffTime
+                    if (finalTime < 0) {
+                        finalTime = 0f
+                    } else if (finalTime > duration) {
+                        finalTime = duration.toFloat()
+                    }
+                    diffTime = finalTime - currentPosition
+
+                    controller.setDraggingProgress(
+                        DraggingProgress(
+                            finalTime = finalTime,
+                            diffTime = diffTime
+                        )
+                    )
+
+                    seekJob = coroutineScope.launch {
+                        delay(200)
+                        controller.seekTo(finalTime.toLong())
+                    }
+                }
             )
-
-            seekJob = CoroutineScope(Dispatchers.Main).launch {
-                delay(200)
-
-                controller.seekTo(finalTime.toLong())
-            }
-
-            return dragDistance
         }
-    }
-
-    Row(modifier = Modifier.fillMaxSize()
-        // TODO
-        .onGloballyPositioned { boxSize = it.size }
-        .dragGestureFilter(
-            dragObserver = dragObserver,
-            canDrag = {
-                it.name == "LEFT" || it.name == "RIGHT"
-            }
-        )
-            + modifier) {
-
-        val commonModifier = Modifier.fillMaxHeight()
-            .tapGestureFilter {
-                controller.showControls()
-            }
-        Box(
-            modifier = commonModifier
-                .weight(2f)
-                .doubleTapGestureFilter {
-                    controller.quickSeekRewind()
-                }
-        )
-
-        // Center where double tap does not exist
-        Box(
-            modifier = commonModifier
-                .weight(1f)
-        )
-
-        Box(
-            modifier = commonModifier
-                .weight(2f)
-                .doubleTapGestureFilter {
-                    controller.quickSeekForward()
-                }
-        )
-    }
+        .then(modifier)
+    )
 }
 
-@Composable
-fun QuickSeekAnimation(
-    modifier: Modifier = Modifier
+suspend fun PointerInputScope.detectMediaPlayerGesture(
+    onTap: (Offset) -> Unit,
+    onDoubleTap: (Offset) -> Unit,
+    onDragStart: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDrag: (Float) -> Unit
 ) {
-    val controller = VideoPlayerControllerAmbient.current
-
-    val state by controller.collect { quickSeekAction }
-
-    Row(modifier = Modifier + modifier) {
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (state.direction == QuickSeekDirection.Rewind) {
-                val transitionState = transition(
-                    definition = transitionDef,
-                    initState = "start",
-                    toState = "end",
-                    onStateChangeFinished = {
-                        controller.setQuickSeekAction(QuickSeekAction.none())
-                    }
-                )
-
-                val realAlpha = 1 - abs(1 - transitionState[alpha])
-                ShadowedIcon(
-                    Icons.Filled.FastRewind,
-                    modifier = Modifier
-                        .drawLayer(alpha = realAlpha)
-                        .align(Alignment.Center)
-                )
-            }
+    coroutineScope {
+        launch {
+            detectHorizontalDragGestures(
+                onDragStart = onDragStart,
+                onDragEnd = onDragEnd,
+                onHorizontalDrag = { change, dragAmount ->
+                    onDrag(dragAmount)
+                    change.consumePositionChange()
+                },
+            )
         }
 
-        Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            if (state.direction == QuickSeekDirection.Forward) {
-                val transitionState = transition(
-                    definition = transitionDef,
-                    initState = "start",
-                    toState = "end",
-                    onStateChangeFinished = {
-                        controller.setQuickSeekAction(QuickSeekAction.none())
-                    }
-                )
-
-                val realAlpha = 1 - abs(1 - transitionState[alpha])
-                ShadowedIcon(
-                    Icons.Filled.FastForward,
-                    modifier = Modifier
-                        .drawLayer(alpha = realAlpha)
-                        .gravity(Alignment.Center)
-                )
-            }
+        launch {
+            detectTapGestures(
+                onTap = onTap,
+                onDoubleTap = onDoubleTap
+            )
         }
     }
 }
 
-@Composable
-fun DraggingProgressOverlay(modifier: Modifier = Modifier) {
-    val controller = VideoPlayerControllerAmbient.current
+fun Modifier.quickSeekAnimation(
+    quickSeekDirection: QuickSeekDirection,
+    onAnimationEnd: () -> Unit
+) = composed {
+    val alphaRewind = remember { Animatable(0f) }
+    val alphaForward = remember { Animatable(0f) }
 
-    val draggingProgress by controller.collect { draggingProgress }
+    LaunchedEffect(quickSeekDirection) {
+        when (quickSeekDirection) {
+            QuickSeekDirection.Rewind -> alphaRewind
+            QuickSeekDirection.Forward -> alphaForward
+            else -> null
+        }?.let { animatable ->
+            animatable.animateTo(1f)
+            animatable.animateTo(0f)
+            onAnimationEnd()
+        }
+    }
 
-    val draggingProgressValue = draggingProgress
+    Row(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            ShadowedIcon(
+                Icons.Filled.FastRewind,
+                modifier = Modifier
+                    .alpha(alphaRewind.value)
+                    .align(Alignment.Center)
+            )
+        }
 
-    if (draggingProgressValue != null) {
-        Box(modifier = Modifier + modifier) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+        ) {
+            ShadowedIcon(
+                Icons.Filled.FastForward,
+                modifier = Modifier
+                    .alpha(alphaForward.value)
+                    .align(Alignment.Center)
+            )
+        }
+    }
+
+    this
+}
+
+fun Modifier.draggingProgressOverlay(draggingProgress: DraggingProgress?) = composed {
+    if (draggingProgress != null) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Text(
-                draggingProgressValue.progressText,
-                fontSize = TextUnit.Companion.Sp(26),
+                draggingProgress.progressText,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
                 style = TextStyle(
                     shadow = Shadow(
@@ -241,30 +241,11 @@ fun DraggingProgressOverlay(modifier: Modifier = Modifier) {
                         offset = Offset(2f, 2f)
                     )
                 ),
-                modifier = Modifier.gravity(Alignment.Center)
+                modifier = Modifier.align(Alignment.Center)
             )
         }
     }
-
-}
-
-private val alpha = FloatPropKey()
-private val transitionDef = transitionDefinition<String> {
-    state("start") {
-        this[alpha] = 0f
-    }
-    state("end") {
-        this[alpha] = 2f
-    }
-
-    transition(fromState = "start", toState = "end") {
-        alpha using tween(
-            durationMillis = 500,
-            easing = LinearEasing
-        )
-    }
-
-    snapTransition("end" to "start")
+    this
 }
 
 @Parcelize
@@ -274,12 +255,12 @@ data class DraggingProgress(
 ) : Parcelable {
     val progressText: String
         get() = "${getDurationString(finalTime.toLong(), false)} " +
-                "[${if (diffTime < 0) "-" else "+"}${
-                    getDurationString(
-                        abs(diffTime.toLong()),
-                        false
-                    )
-                }]"
+            "[${if (diffTime < 0) "-" else "+"}${
+                getDurationString(
+                    abs(diffTime.toLong()),
+                    false
+                )
+            }]"
 }
 
 enum class QuickSeekDirection {
