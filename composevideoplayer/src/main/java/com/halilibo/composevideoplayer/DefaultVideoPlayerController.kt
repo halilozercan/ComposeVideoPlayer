@@ -1,5 +1,6 @@
 package com.halilibo.composevideoplayer
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import androidx.compose.runtime.Composable
@@ -7,6 +8,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.MediaSource
@@ -16,7 +18,8 @@ import com.google.android.exoplayer2.upstream.DataSource
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
 import com.google.android.exoplayer2.upstream.RawResourceDataSource
 import com.google.android.exoplayer2.util.Util
-import com.google.android.exoplayer2.video.VideoListener
+import com.google.android.exoplayer2.video.VideoSize
+
 import com.halilibo.composevideoplayer.util.FlowDebouncer
 import com.halilibo.composevideoplayer.util.set
 import kotlinx.coroutines.*
@@ -51,6 +54,7 @@ internal class DefaultVideoPlayerController(
         return _state.collectAsState()
     }
 
+    @SuppressLint("StateFlowValueCalledInComposition")
     @Composable
     fun <T> collect(filter: VideoPlayerState.() -> T): State<T> {
         return remember(filter) {
@@ -71,10 +75,21 @@ internal class DefaultVideoPlayerController(
     private var playerView: PlayerView? = null
 
     private var updateDurationAndPositionJob: Job? = null
-    private val playerEventListener = object : Player.EventListener {
+
+
+    private val playerListener = object : Player.Listener {
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            super.onVideoSizeChanged(videoSize)
+            val width = videoSize.width
+            val height = videoSize.height
+
+            _state.set {
+                copy(videoSize = width.toFloat() to height.toFloat())
+            }
+        }
 
         override fun onPlayerStateChanged(playWhenReady: Boolean, playbackState: Int) {
-            if(PlaybackState.of(playbackState) == PlaybackState.READY) {
+            if (PlaybackState.of(playbackState) == PlaybackState.READY) {
                 initialStateRunner = initialStateRunner?.let {
                     it.invoke()
                     null
@@ -98,30 +113,15 @@ internal class DefaultVideoPlayerController(
         }
     }
 
-    private val videoListener = object : VideoListener {
-        override fun onVideoSizeChanged(
-            width: Int,
-            height: Int,
-            unappliedRotationDegrees: Int,
-            pixelWidthHeightRatio: Float
-        ) {
-            super.onVideoSizeChanged(width, height, unappliedRotationDegrees, pixelWidthHeightRatio)
-
-            _state.set {
-                copy(videoSize = width.toFloat() to height.toFloat())
-            }
-        }
-    }
-
     /**
      * Internal exoPlayer instance
      */
-    private val exoPlayer = SimpleExoPlayer.Builder(context)
+    private val exoPlayer = ExoPlayer.Builder(context)
         .build()
         .apply {
             playWhenReady = initialState.isPlaying
-            addListener(playerEventListener)
-            addVideoListener(videoListener)
+            addListener(playerListener)
+
         }
 
     /**
