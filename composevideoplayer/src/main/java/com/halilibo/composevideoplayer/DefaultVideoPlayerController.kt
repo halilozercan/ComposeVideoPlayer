@@ -9,17 +9,14 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
-import com.google.android.exoplayer2.SimpleExoPlayer
 import com.google.android.exoplayer2.source.MediaSource
 import com.google.android.exoplayer2.source.ProgressiveMediaSource
 import com.google.android.exoplayer2.ui.PlayerView
-import com.google.android.exoplayer2.upstream.DataSource
-import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory
-import com.google.android.exoplayer2.upstream.RawResourceDataSource
+import com.google.android.exoplayer2.upstream.*
 import com.google.android.exoplayer2.util.Util
 import com.google.android.exoplayer2.video.VideoSize
-
 import com.halilibo.composevideoplayer.util.FlowDebouncer
 import com.halilibo.composevideoplayer.util.set
 import kotlinx.coroutines.*
@@ -127,7 +124,7 @@ internal class DefaultVideoPlayerController(
     /**
      * Not so efficient way of showing preview in video slider.
      */
-    private val previewExoPlayer = SimpleExoPlayer.Builder(context)
+    private val previewExoPlayer = ExoPlayer.Builder(context)
         .build()
         .apply {
             playWhenReady = false
@@ -239,19 +236,27 @@ internal class DefaultVideoPlayerController(
 
     private fun prepare() {
         fun createVideoSource(): MediaSource {
-            val dataSourceFactory: DataSource.Factory = DefaultDataSourceFactory(
-                context,
-                Util.getUserAgent(context, context.packageName)
-            )
+            val baseFactory = DefaultHttpDataSource.Factory().apply {
+                setUserAgent(Util.getUserAgent(context, context.packageName))
+            }
+
+            val dataSourceFactory: DefaultDataSource.Factory =
+                DefaultDataSource.Factory(context, baseFactory)
 
             return when (val source = source) {
                 is VideoPlayerSource.Raw -> {
                     ProgressiveMediaSource.Factory(dataSourceFactory)
-                        .createMediaSource(RawResourceDataSource.buildRawResourceUri(source.resId))
+                        .createMediaSource(
+                            MediaItem.fromUri(
+                                RawResourceDataSource.buildRawResourceUri(
+                                    source.resId
+                                )
+                            )
+                        )
                 }
                 is VideoPlayerSource.Network -> {
                     ProgressiveMediaSource.Factory(dataSourceFactory)
-                        .createMediaSource(Uri.parse(source.url))
+                        .createMediaSource(MediaItem.fromUri(Uri.parse(source.url)))
                 }
             }
         }
